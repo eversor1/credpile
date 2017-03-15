@@ -210,22 +210,24 @@ def paddedInt(i):
     return (pad * "0") + i_str
 
 
-def getHighestVersion(name, region=None, table="credential-store",
+def getHighestVersion(name, region=None, bucket="credential-store", path="credpile/"
                       **kwargs):
     '''
     Return the highest version of `name` in the table
     '''
     session = get_session(**kwargs)
+    credclient = session.client('s3')
+    secrets = credclient.get_object(Bucket=bucket, key=path+name)
 
-    dynamodb = session.resource('dynamodb', region_name=region)
-    secrets = dynamodb.Table(table)
+    #dynamodb = session.resource('dynamodb', region_name=region)
+    #secrets = dynamodb.Table(table)
 
-    response = secrets.query(Limit=1,
-                             ScanIndexForward=False,
-                             ConsistentRead=True,
-                             KeyConditionExpression=boto3.dynamodb.conditions.Key(
-                                 "name").eq(name),
-                             ProjectionExpression="version")
+    #response = secrets.query(Limit=1,
+    #                         ScanIndexForward=False,
+    #                         ConsistentRead=True,
+    #                         KeyConditionExpression=boto3.dynamodb.conditions.Key(
+    #                             "name").eq(name),
+    #                         ProjectionExpression="version")
 
     if response["Count"] == 0:
         return 0
@@ -671,9 +673,12 @@ def get_parser():
                                   "or if that is not set, the value in "
                                   "`~/.aws/config`. As a last resort, "
                                   "it will use " + DEFAULT_REGION)
-    parsers['super'].add_argument("-t", "--table", default="credential-store",
-                                  help="DynamoDB table to use for "
+    parsers['super'].add_argument("-b", "--bucket", default="credential-store",
+                                  help="S3 Bucket to use for "
                                   "credential storage")
+    parsers['super'].add_argument("-P", "--path", default="credpile",
+                                  help="Path to use for "
+                                  "credential storage files")
     role_parse = parsers['super'].add_mutually_exclusive_group()
     role_parse.add_argument("-p", "--profile", default=None,
                             help="Boto config profile to use when "
