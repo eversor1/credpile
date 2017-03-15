@@ -453,8 +453,8 @@ def getSecretAction(args, region, **session_params):
 
 
 def getSecret(name, version="", region=None,
-              table="credential-store", context=None,
-              dynamodb=None, kms=None, **kwargs):
+              bucket="credential-store", context=None,
+              path="", s3=None, kms=None, **kwargs):
     '''
     fetch and decrypt the secret called `name`
     '''
@@ -462,30 +462,42 @@ def getSecret(name, version="", region=None,
         context = {}
 
     # Can we cache
-    if dynamodb is None or kms is None:
+    if s3 is None or kms is None:
         session = get_session(**kwargs)
-        if dynamodb is None:
-            dynamodb = session.resource('dynamodb', region_name=region)
+        if s3 is None:
+            s3 = session.client('s3', region_name=region)
         if kms is None:
             kms = session.client('kms', region_name=region)
 
-    secrets = dynamodb.Table(table)
-
-    if version == "":
+    #secrets = dynamodb.Table(table)
+    try: 
+      secretsObj = s3.get_object(Bucket=bucket, Key=path+name)
+      secrets = pickle.loads(secretsObj['Body'])
+      if version == "":
+        material = secrets[max(keys(secrets))]
+      else:
+        try:
+          material = secrets[version]
+        except:
+          raise ItemNotFound("Item {'name': '%s', 'version': '%s'} couldn't be found." % (name, version))
+    except:
+      raise ItemNotFound("Item {'name': '%s'} couldn't be found." % name)
+      
+    #if version == "":
         # do a consistent fetch of the credential with the highest version
-        response = secrets.query(Limit=1,
-                                 ScanIndexForward=False,
-                                 ConsistentRead=True,
-                                 KeyConditionExpression=boto3.dynamodb.conditions.Key("name").eq(name))
-        if response["Count"] == 0:
-            raise ItemNotFound("Item {'name': '%s'} couldn't be found." % name)
-        material = response["Items"][0]
-    else:
-        response = secrets.get_item(Key={"name": name, "version": version})
-        if "Item" not in response:
-            raise ItemNotFound(
-                "Item {'name': '%s', 'version': '%s'} couldn't be found." % (name, version))
-        material = response["Item"]
+        #response = secrets.query(Limit=1,
+        #                         ScanIndexForward=False,
+        #                         ConsistentRead=True,
+        #                         KeyConditionExpression=boto3.dynamodb.conditions.Key("name").eq(name))
+    #    if response["Count"] == 0:
+    #        raise ItemNotFound("Item {'name': '%s'} couldn't be found." % name)
+    #    material = response["Items"][0]
+    #else:
+    #    response = secrets.get_item(Key={"name": name, "version": version})
+    #    if "Item" not in response:
+    #        raise ItemNotFound(
+    #            "Item {'name': '%s', 'version': '%s'} couldn't be found." % (name, version))
+    #    material = response["Item"]
 
     key_service = KeyService(kms, None, context)
 
