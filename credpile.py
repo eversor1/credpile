@@ -25,6 +25,7 @@ import sys
 import re
 import boto3
 import botocore.exceptions
+import pickle
 
 try:
     from StringIO import StringIO
@@ -210,7 +211,7 @@ def paddedInt(i):
     return (pad * "0") + i_str
 
 
-def getHighestVersion(name, region=None, bucket="credential-store", path="credpile/"
+def getHighestVersion(name, region=None, bucket="credential-store", path="",
                       **kwargs):
     '''
     Return the highest version of `name` in the table
@@ -220,11 +221,8 @@ def getHighestVersion(name, region=None, bucket="credential-store", path="credpi
     credclient = session.client('s3')
     try: 
       secrets = credclient.get_object(Bucket=bucket, key=path+name)
-      for cred in secrets['Body'].read().splitlines():
-        parts = cred.split('|')
-        if int(parts[1]) > version:
-          version = parts[1];
-      return version
+      creds = pickle.loads(secrets['Body'].read())
+      return max(keys(creds))
     except:
       return 0
       
@@ -259,31 +257,33 @@ def clean_fail(func):
             sys.exit(1)
     return func_wrapper
 
+def cleanName(name):
+    return name.split('/')[-1]
 
-def listSecrets(region=None, bucket="credential-store", path="credpile/", **kwargs):
+def listSecrets(region=None, bucket="credential-store", path="", **kwargs):
     '''
     do a full-table scan of the credential-store,
     and return the names and versions of every credential
     '''
+    response=[]
     session = get_session(**kwargs)
     credclient = session.get_client('s3')
     files = client.list_objects_v2(Bucket=bucket, Prefix=path)
-    for file in files['Contents']:
-      file['Key']
-#open each file and build the response array
-
-    
+    for f in files['Contents']:
+      responseItem['name'] = cleanName(f['Key'])
+      responseItem['version'] = getHighestVersion(name=f['Key'], bucket=bucket, region=region)
+      response.extend(responseItem)
 
     #dynamodb = session.resource('dynamodb', region_name=region)
     #secrets = dynamodb.Table(table)
 
     #response = secrets.scan(ProjectionExpression="#N, version",
     #                        ExpressionAttributeNames={"#N": "name"})
-    return response["Items"]
+    return response
 
 
 def putSecret(name, secret, version="", kms_key="alias/credstash",
-              region=None, table="credential-store", context=None,
+              region=None, bucket="credential-store", path="credpile/", context=None,
               digest=DEFAULT_DIGEST, **kwargs):
     '''
     put a secret called `name` into the secret-store,
@@ -300,16 +300,27 @@ def putSecret(name, secret, version="", kms_key="alias/credstash",
         digest_method=digest,
     )
 
-    dynamodb = session.resource('dynamodb', region_name=region)
-    secrets = dynamodb.Table(table)
+    #dynamodb = session.resource('dynamodb', region_name=region)
+    #secrets = dynamodb.Table(table)
+    try: 
+      secretsdata = credclient.get_object(Bucket=bucket, key=path+name)
+      secrets = pickle.loads(secretsdata)
+    except:
+      pass
 
     data = {
         'name': name,
         'version': paddedInt(version),
     }
     data.update(sealed)
-
-    return secrets.put_item(Item=data, ConditionExpression=Attr('name').not_exists())
+    appender[paddedInt(version)] = data
+    secrets.extend(appender)
+    putobj = pickle.dumps(secrets)
+    try:
+      return credclient.put_object(Bucket=bucket, key=path+name, ServerSideEncryption='AES256', Body=putobj)
+    except:
+      return false
+    #return secrets.put_item(Item=data, ConditionExpression=Attr('name').not_exists())
 
 
 def getAllSecrets(version="", region=None, table="credential-store",
@@ -378,7 +389,8 @@ def putSecretAction(args, region, **session_params):
     if args.autoversion:
         latestVersion = getHighestVersion(args.credential,
                                           region,
-                                          args.table,
+                                          args.bucket,
+                                          args.path,
                                           **session_params)
         try:
             version = paddedInt(int(latestVersion) + 1)
@@ -389,8 +401,8 @@ def putSecretAction(args, region, **session_params):
         version = args.version
     try:
         if putSecret(args.credential, args.value, version,
-                     kms_key=args.key, region=region, table=args.table,
-                     context=args.context, digest=args.digest,
+                     kms_key=args.key, region=region, bucket=args.bucket,
+                     path=args.path, context=args.context, digest=args.digest,
                      **session_params):
             print("{0} has been stored".format(args.credential))
     except KmsError as e:
@@ -398,7 +410,7 @@ def putSecretAction(args, region, **session_params):
     except botocore.exceptions.ClientError as e:
         if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
             latestVersion = getHighestVersion(args.credential, region,
-                                              args.table,
+                                              args.bucket, args.table,
                                               **session_params)
             fatal("%s version %s is already in the credential store. "
                   "Use the -v flag to specify a new version" %
