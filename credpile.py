@@ -215,9 +215,19 @@ def getHighestVersion(name, region=None, bucket="credential-store", path="credpi
     '''
     Return the highest version of `name` in the table
     '''
+    version=0
     session = get_session(**kwargs)
     credclient = session.client('s3')
-    secrets = credclient.get_object(Bucket=bucket, key=path+name)
+    try: 
+      secrets = credclient.get_object(Bucket=bucket, key=path+name)
+      for cred in secrets['Body'].read().splitlines():
+        parts = cred.split('|')
+        if int(parts[1]) > version:
+          version = parts[1];
+      return version
+    except:
+      return 0
+      
 
     #dynamodb = session.resource('dynamodb', region_name=region)
     #secrets = dynamodb.Table(table)
@@ -229,9 +239,9 @@ def getHighestVersion(name, region=None, bucket="credential-store", path="credpi
     #                             "name").eq(name),
     #                         ProjectionExpression="version")
 
-    if response["Count"] == 0:
-        return 0
-    return response["Items"][0]["version"]
+    #if response["Count"] == 0:
+    #    return 0
+    #return response["Items"][0]["version"]
 
 
 def clean_fail(func):
