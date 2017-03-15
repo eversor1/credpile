@@ -260,18 +260,25 @@ def clean_fail(func):
     return func_wrapper
 
 
-def listSecrets(region=None, table="credential-store", **kwargs):
+def listSecrets(region=None, bucket="credential-store", path="credpile/", **kwargs):
     '''
     do a full-table scan of the credential-store,
     and return the names and versions of every credential
     '''
     session = get_session(**kwargs)
+    credclient = session.get_client('s3')
+    files = client.list_objects_v2(Bucket=bucket, Prefix=path)
+    for file in files['Contents']:
+      file['Key']
+#open each file and build the response array
 
-    dynamodb = session.resource('dynamodb', region_name=region)
-    secrets = dynamodb.Table(table)
+    
 
-    response = secrets.scan(ProjectionExpression="#N, version",
-                            ExpressionAttributeNames={"#N": "name"})
+    #dynamodb = session.resource('dynamodb', region_name=region)
+    #secrets = dynamodb.Table(table)
+
+    #response = secrets.scan(ProjectionExpression="#N, version",
+    #                        ExpressionAttributeNames={"#N": "name"})
     return response["Items"]
 
 
