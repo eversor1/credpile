@@ -1,18 +1,18 @@
 from setuptools import setup
 
 setup(
-    name='credstash',
-    version='1.13.2',
-    description='A utility for managing secrets in the cloud using AWS KMS and DynamoDB',
+    name='credpile',
+    version='0.0.2',
+    description='A utility for managing secrets in the cloud using AWS KMS and S3',
     license='Apache2',
-    url='https://github.com/LuminalOSS/credstash',
+    url='https://github.com/eversor1/credpile',
     classifiers=[
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: Apache Software License',
     ],
-    scripts=['credstash.py'],
-    py_modules=['credstash'],
+    scripts=['credpile.py'],
+    py_modules=['credpile'],
     install_requires=[
         'cryptography>=1.5, <2.0',
         'boto3>=1.1.1',
@@ -22,7 +22,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'credstash = credstash:main'
+            'credpile = credpile:main'
         ]
     }
 )

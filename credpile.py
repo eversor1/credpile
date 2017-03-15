@@ -247,7 +247,7 @@ def clean_fail(func):
     A decorator to cleanly exit on a failed call to AWS.
     catch a `botocore.exceptions.ClientError` raised from an action.
     This sort of error is raised if you are targeting a region that
-    isn't set up (see, `credstash setup`.
+    isn't set up (see, `credpile setup`.
     '''
     def func_wrapper(*args, **kwargs):
         try:
@@ -282,7 +282,7 @@ def listSecrets(region=None, bucket="credential-store", path="", **kwargs):
     return response
 
 
-def putSecret(name, secret, version="", kms_key="alias/credstash",
+def putSecret(name, secret, version="", kms_key="alias/credpile",
               region=None, bucket="credential-store", path="", context=None,
               digest=DEFAULT_DIGEST, **kwargs):
     '''
@@ -589,7 +589,7 @@ def get_assumerole_credentials(arn):
     sts_client = boto3.client('sts')
     # Use client object and pass the role ARN
     assumedRoleObject = sts_client.assume_role(RoleArn=arn,
-                                               RoleSessionName="AssumeRoleCredstashSession1")
+                                               RoleSessionName="AssumeRoleCredpileSession1")
     credentials = assumedRoleObject['Credentials']
     return dict(aws_access_key_id=credentials['AccessKeyId'],
                 aws_secret_access_key=credentials['SecretAccessKey'],
@@ -713,7 +713,7 @@ def get_parser():
 
     parsers['super'].add_argument("-r", "--region",
                                   help="the AWS region in which to operate. "
-                                  "If a region is not specified, credstash "
+                                  "If a region is not specified, credpile "
                                   "will use the value of the "
                                   "AWS_DEFAULT_REGION env variable, "
                                   "or if that is not set, the value in "
@@ -722,7 +722,7 @@ def get_parser():
     parsers['super'].add_argument("-b", "--bucket", default="credential-store",
                                   help="S3 Bucket to use for "
                                   "credential storage")
-    parsers['super'].add_argument("-P", "--path", default="credpile",
+    parsers['super'].add_argument("-P", "--path", default="credpile/",
                                   help="Path to use for "
                                   "credential storage files")
     role_parse = parsers['super'].add_mutually_exclusive_group()
@@ -808,10 +808,10 @@ def get_parser():
                                  help="encryption context key/value pairs "
                                  "associated with the credential in the form "
                                  "of \"key=value\"")
-    parsers[action].add_argument("-k", "--key", default="alias/credstash",
+    parsers[action].add_argument("-k", "--key", default="alias/credpile",
                                  help="the KMS key-id of the master key "
                                  "to use. See the README for more "
-                                 "information. Defaults to alias/credstash")
+                                 "information. Defaults to alias/credpile")
     parsers[action].add_argument("-v", "--version", default="",
                                  help="Put a specific version of the "
                                  "credential (update the credential; "
