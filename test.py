@@ -12,3 +12,7 @@ try:
   print version
 except:
   print 0
+
+files = client.list_objects_v2(Bucket="credpile", Prefix="creds/")
+for file in files['Contents']:
+  print file['Key'] 
