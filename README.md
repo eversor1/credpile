@@ -1,14 +1,7 @@
-# CredStash
-
-## Quick Installation
-0. (Linux only) Install dependencies 
-1. `pip install credstash`
-2. Set up a key called credstash in KMS (found in the IAM console)
-3. Make sure you have AWS creds in a place that boto/botocore can read them
-4. `credstash setup`
+# CredPile
 
 ### Linux install-time dependencies
-Credstash recently moved from PyCrypto to `cryptography`. `cryptography` uses pre-built binary wheels on OSX and Windows, but does not on Linux. That means that you need to install some dependencies if you want to run credstash on linux. 
+Credpile recently moved from PyCrypto to `cryptography`. `cryptography` uses pre-built binary wheels on OSX and Windows, but does not on Linux. That means that you need to install some dependencies if you want to run credstash on linux. 
 
 For Debian and Ubuntu, the following command will ensure that the required dependencies are installed:
 ```
@@ -19,8 +12,6 @@ For Fedora and RHEL-derivatives, the following command will ensure that the requ
 $ sudo yum install gcc libffi-devel python-devel openssl-devel
 ```
 
-In either case, once you've installed the dependencies, you can do `pip install credstash` as usual.
-
 See https://cryptography.io/en/latest/installation/ for more information.
 
 
@@ -30,17 +21,6 @@ Software systems often need access to some shared credential. For example, your 
 Some organizations build complete credential-management systems, but for most of us, managing these credentials is usually an afterthought. In the best case, people use systems like ansible-vault, which does a pretty good job, but leads to other management issues (like where/how to store the master key). A lot of credential management schemes amount to just SCP'ing a `secrets` file out to the fleet, or in the worst case, burning secrets into the SCM (do a github search on `password`).
 
 CredStash is a very simple, easy to use credential management and distribution system that uses AWS Key Management Service (KMS) for key wrapping and master-key storage, and DynamoDB for credential storage and sharing.
-
-## Compatibility with Other Languages 
-A number of great projects exist to provide credstash compatability with other languages. Here are the ones that we know about (feel free to open a pull request if you know of another):
-
-- https://github.com/jessecoyle/jcredstash (Java)
-- https://github.com/adorechic/rcredstash (Ruby)
-- https://github.com/kdrakon/scala-credstash (Scala)
-- https://github.com/gmo/credstash-php (PHP)
-- https://github.com/DavidTanner/nodecredstash (Node.js)
-- https://github.com/winebarrel/gcredstash (Go)
-- https://github.com/Narochno/Narochno.Credstash (C#)
 
 
 ## How does it work?
