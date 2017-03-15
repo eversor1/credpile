@@ -283,7 +283,7 @@ def listSecrets(region=None, bucket="credential-store", path="", **kwargs):
 
 
 def putSecret(name, secret, version="", kms_key="alias/credstash",
-              region=None, bucket="credential-store", path="credpile/", context=None,
+              region=None, bucket="credential-store", path="", context=None,
               digest=DEFAULT_DIGEST, **kwargs):
     '''
     put a secret called `name` into the secret-store,
@@ -302,10 +302,13 @@ def putSecret(name, secret, version="", kms_key="alias/credstash",
 
     #dynamodb = session.resource('dynamodb', region_name=region)
     #secrets = dynamodb.Table(table)
+    credclient = session.client('s3', region_name=region)
+    appender = {}
     try: 
       secretsdata = credclient.get_object(Bucket=bucket, key=path+name)
       secrets = pickle.loads(secretsdata)
     except:
+      secrets = {}
       pass
 
     data = {
@@ -314,12 +317,12 @@ def putSecret(name, secret, version="", kms_key="alias/credstash",
     }
     data.update(sealed)
     appender[paddedInt(version)] = data
-    secrets.extend(appender)
+    secrets.update(appender)
     putobj = pickle.dumps(secrets)
-    try:
-      return credclient.put_object(Bucket=bucket, key=path+name, ServerSideEncryption='AES256', Body=putobj)
-    except:
-      return false
+    #try:
+    return credclient.put_object(Bucket=bucket, Key=path+name, ServerSideEncryption='AES256', Body=putobj)
+    #except:
+    #  return False
     #return secrets.put_item(Item=data, ConditionExpression=Attr('name').not_exists())
 
 
@@ -427,20 +430,22 @@ def getSecretAction(args, region, **session_params):
                                     [x["name"]
                                      for x
                                      in listSecrets(region=region,
-                                                    table=args.table,
+                                                    bucket=args.bucket,
+                                                    path=args.path,
                                                     **session_params)])
             print(json.dumps(dict((name,
                                    getSecret(name,
                                              args.version,
                                              region=region,
-                                             table=args.table,
+                                             bucket=args.bucket,
+                                             path=args.path,
                                              context=args.context,
                                              **session_params))
                                   for name in names)))
         else:
             sys.stdout.write(getSecret(args.credential, args.version,
-                                       region=region, table=args.table,
-                                       context=args.context,
+                                       region=region, bucket=args.bucket,
+                                       path=args.path, context=args.context,
                                        **session_params))
             if not args.noline:
                 sys.stdout.write("\n")
@@ -472,9 +477,9 @@ def getSecret(name, version="", region=None,
     #secrets = dynamodb.Table(table)
     try: 
       secretsObj = s3.get_object(Bucket=bucket, Key=path+name)
-      secrets = pickle.loads(secretsObj['Body'])
+      secrets = pickle.loads(secretsObj['Body'].read())
       if version == "":
-        material = secrets[max(keys(secrets))]
+        material = secrets[max(secrets.keys())]
       else:
         try:
           material = secrets[version]
