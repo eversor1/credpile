@@ -34,6 +34,7 @@ import re
 import boto3
 import botocore.exceptions
 import pickle
+import copy
 
 try:
     from StringIO import StringIO
@@ -223,12 +224,9 @@ def cleanPath(path):
     clean up the provided path string
     '''
     if len(path) > 0:
-      if path.endswith('/'):
-        return path
-      else
-        return path+'/'
-    else
-      return path
+      if not path.endswith('/'):
+        path = path+'/'
+    return path
 
 def getHighestVersion(name, region=None, bucket="credential-store", path="",
                       **kwargs):
@@ -237,30 +235,14 @@ def getHighestVersion(name, region=None, bucket="credential-store", path="",
     '''
     version=0
     session = get_session(**kwargs)
-    credclient = session.client('s3')
+    credclient = session.client('s3', region_name=region)
     try: 
-      secrets = credclient.get_object(Bucket=bucket, key=cleanPath(path)+name)
+      secrets = credclient.get_object(Bucket=bucket, Key=cleanPath(path)+name)
       creds = pickle.loads(secrets['Body'].read())
-      return max(keys(creds))
+      return max(creds.keys())
     except:
       return 0
       
-
-    #dynamodb = session.resource('dynamodb', region_name=region)
-    #secrets = dynamodb.Table(table)
-
-    #response = secrets.query(Limit=1,
-    #                         ScanIndexForward=False,
-    #                         ConsistentRead=True,
-    #                         KeyConditionExpression=boto3.dynamodb.conditions.Key(
-    #                             "name").eq(name),
-    #                         ProjectionExpression="version")
-
-    #if response["Count"] == 0:
-    #    return 0
-    #return response["Items"][0]["version"]
-
-
 def clean_fail(func):
     '''
     A decorator to cleanly exit on a failed call to AWS.
@@ -280,31 +262,22 @@ def cleanName(name):
     return name.split('/')[-1]
 
 def listSecrets(region=None, bucket="credential-store", path="", **kwargs):
-    '''
-    do a full-table scan of the credential-store,
-    and return the names and versions of every credential
-    '''
     response=[]
-    responseItem=[]
+    responseItem={}
     session = get_session(**kwargs)
-    credclient = session.get_client('s3')
+    client = session.client('s3', region_name=region)
     files = client.list_objects_v2(Bucket=bucket, Prefix=path)
     for f in files['Contents']:
       responseItem['name'] = cleanName(f['Key'])
       try: 
-        secrets = credclient.get_object(Bucket=bucket, key=f['Key'])
+        secrets = client.get_object(Bucket=bucket, Key=f['Key'])
         creds = pickle.loads(secrets['Body'].read())
         for version in creds.keys():
           responseItem['version'] = version
-          response.extend(responseItem)
+          response.append(copy.copy(responseItem))
       except:
-        pass
+        print("Error reading file: %s" % f['Key'])
 
-    #dynamodb = session.resource('dynamodb', region_name=region)
-    #secrets = dynamodb.Table(table)
-
-    #response = secrets.scan(ProjectionExpression="#N, version",
-    #                        ExpressionAttributeNames={"#N": "name"})
     return response
 
 
@@ -326,13 +299,10 @@ def putSecret(name, secret, version="", kms_key="alias/credpile",
         digest_method=digest,
     )
 
-    #dynamodb = session.resource('dynamodb', region_name=region)
-    #secrets = dynamodb.Table(table)
     credclient = session.client('s3', region_name=region)
-    appender = {}
     try: 
-      secretsdata = credclient.get_object(Bucket=bucket, key=cleanPath(path)+name)
-      secrets = pickle.loads(secretsdata)
+      secretsdata = credclient.get_object(Bucket=bucket, Key=cleanPath(path)+name)
+      secrets = pickle.loads(secretsdata['Body'].read())
     except:
       secrets = {}
       pass
@@ -342,8 +312,7 @@ def putSecret(name, secret, version="", kms_key="alias/credpile",
         'version': paddedInt(version),
     }
     data.update(sealed)
-    appender[paddedInt(version)] = data
-    secrets.update(appender)
+    secrets[paddedInt(version)] = data
     putobj = pickle.dumps(secrets)
     try:
       return credclient.put_object(Bucket=bucket, Key=cleanPath(path)+name, ServerSideEncryption='AES256', Body=putobj)
@@ -358,7 +327,6 @@ def getAllSecrets(version="", region=None, bucket="credential-store", path="",
     output = {}
     if session is None:
         session = get_session(**kwargs)
-    #dynamodb = session.resource('dynamodb', region_name=region)
     s3 = session.client('s3', region_name=region)
     kms = session.client('kms', region_name=region)
     secrets = listSecrets(region, bucket, path, **kwargs)
@@ -371,6 +339,7 @@ def getAllSecrets(version="", region=None, bucket="credential-store", path="",
     else:
         names = set(x["name"] for x in secrets)
 
+    print(names)
     for credential in names:
         try:
             output[credential] = getSecret(credential,
@@ -379,7 +348,7 @@ def getAllSecrets(version="", region=None, bucket="credential-store", path="",
                                            bucket,
 					                                 path,
                                            context,
-                                           s3
+                                           s3,
                                            kms,
                                            **kwargs)
         except:
@@ -501,13 +470,13 @@ def getSecret(name, version="", region=None,
 
     #secrets = dynamodb.Table(table)
     try: 
-      secretsObj = s3.get_object(Bucket=bucket, Key=path+name)
+      secretsObj = s3.get_object(Bucket=bucket, Key=cleanPath(path)+name)
       secrets = pickle.loads(secretsObj['Body'].read())
       if version == "":
         material = secrets[max(secrets.keys())]
       else:
         try:
-          material = secrets[version]
+          material = secrets[paddedInt(version)]
         except:
           raise ItemNotFound("Item {'name': '%s', 'version': '%s'} couldn't be found." % (name, version))
     except:
@@ -540,7 +509,7 @@ def deleteSecrets(name, region=None, bucket="credential-store", path="", **kwarg
     s3 = session.client('s3', region_name=region)
 
     try: 
-      secrets = credclient.delete_object(Bucket=bucket, key=path+name)
+      secrets = s3.delete_object(Bucket=bucket, Key=cleanPath(path)+name)
       print("Deleting all versions of %s" % name)
     except:
       raise botocore.exceptions.ClientError
