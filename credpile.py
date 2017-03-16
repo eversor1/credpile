@@ -339,18 +339,17 @@ def getAllSecrets(version="", region=None, bucket="credential-store", path="",
     else:
         names = set(x["name"] for x in secrets)
 
-    print(names)
     for credential in names:
         try:
-            output[credential] = getSecret(credential,
-                                           version,
-                                           region,
-                                           bucket,
-					                                 path,
-                                           context,
-                                           s3,
-                                           kms,
-                                           **kwargs)
+          output[credential] = getSecret(credential,
+                                         version=version,
+                                         region=region,
+                                         bucket=bucket,
+                                         path=path,
+                                         context=context,
+                                         s3=s3,
+                                         kms=kms,
+                                         **kwargs)
         except:
             pass
     return output
@@ -468,7 +467,6 @@ def getSecret(name, version="", region=None,
         if kms is None:
             kms = session.client('kms', region_name=region)
 
-    #secrets = dynamodb.Table(table)
     try: 
       secretsObj = s3.get_object(Bucket=bucket, Key=cleanPath(path)+name)
       secrets = pickle.loads(secretsObj['Body'].read())
@@ -482,22 +480,6 @@ def getSecret(name, version="", region=None,
     except:
       raise ItemNotFound("Item {'name': '%s'} couldn't be found." % name)
       
-    #if version == "":
-        # do a consistent fetch of the credential with the highest version
-        #response = secrets.query(Limit=1,
-        #                         ScanIndexForward=False,
-        #                         ConsistentRead=True,
-        #                         KeyConditionExpression=boto3.dynamodb.conditions.Key("name").eq(name))
-    #    if response["Count"] == 0:
-    #        raise ItemNotFound("Item {'name': '%s'} couldn't be found." % name)
-    #    material = response["Items"][0]
-    #else:
-    #    response = secrets.get_item(Key={"name": name, "version": version})
-    #    if "Item" not in response:
-    #        raise ItemNotFound(
-    #            "Item {'name': '%s', 'version': '%s'} couldn't be found." % (name, version))
-    #    material = response["Item"]
-
     key_service = KeyService(kms, None, context)
 
     return open_aes_ctr_legacy(key_service, material)
