@@ -24,7 +24,7 @@ CredPile is a very simple, easy to use credential management and distribution sy
 
 
 ## How does it work?
-After you complete the steps in the `Setup` section, you will have an encryption key in KMS (in this README, we will refer to that key as the `master key`), and a credential storage table in DDB.
+After you complete the steps in the `Setup` section, you will have an encryption key in KMS (in this README, we will refer to that key as the `master key`), and a credential storage file in S3.
 
 ### Stashing Secrets
 Whenever you want to store/share a credential, such as a database password, you simply run `credpile put [credential-name] [credential-value]`. For example, `credpile put myapp.db.prod supersecretpassword1234`. credpile will go to the KMS and generate a unique data encryption key, which itself is encrypted by the master key (this is called key wrapping). credpile will use the data encryption key to encrypt the credential value. It will then store the encrypted credential, along with the wrapped (encrypted) data encryption key in the credential store in S3.
@@ -36,7 +36,7 @@ When you want to fetch the credential, for example as part of the bootstrap proc
 Optionally, you can include any number of [Encryption Context](http://docs.aws.amazon.com/kms/latest/developerguide/encrypt-context.html) key value pairs to associate with the credential. The exact set of encryption context key value pairs that were associated with the credential when it was `put` in S3 must be provided in the `get` request to successfully decrypt the credential. These encryption context key value pairs are useful to provide auditing context to the encryption and decryption operations in your CloudTrail logs. They are also useful for constraining access to a given credpile stored credential by using KMS Key Policy conditions and KMS Grant conditions. Doing so allows you to, for example, make sure that your database servers and web-servers can read the web-server DB user password but your database servers can not read your web-servers TLS/SSL certificate's private key. A `put` request with encryption context would look like `credpile put myapp.db.prod supersecretpassword1234 app.tier=db environment=prod`. In order for your web-servers to read that same credential they would execute a `get` call like `export DB_PASSWORD=$(credpile get myapp.db.prod environment=prod app.tier=db)`
 
 ### Versioning Secrets
-Credentials stored in the credential-store are versioned and immutable. That is, if you `put` a credential called `foo` with a version of `1` and a value of `bar`, then foo version 1 will always have a value of bar, and there is no way in `credpile` to change its value (although you could go fiddle with the bits in DDB, but you shouldn't do that). Credential rotation is handed through versions. Suppose you do `credpile put foo bar`, and then decide later to rotate `foo`, you can put version 2 of `foo` by doing `credpile put foo baz -v `. The next time you do `credpile get foo`, it will return `baz`. You can get specific credential versions as well (with the same `-v` flag). You can fetch a list of all credentials in the credential-store and their versions with the `list` command.
+Credentials stored in the credential-store are versioned and immutable. That is, if you `put` a credential called `foo` with a version of `1` and a value of `bar`, then foo version 1 will always have a value of bar, and there is no way in `credpile` to change its value (although you could go fiddle with the files in S3, but you shouldn't do that). Credential rotation is handed through versions. Suppose you do `credpile put foo bar`, and then decide later to rotate `foo`, you can put version 2 of `foo` by doing `credpile put foo baz -v `. The next time you do `credpile get foo`, it will return `baz`. You can get specific credential versions as well (with the same `-v` flag). You can fetch a list of all credentials in the credential-store and their versions with the `list` command.
 
 ## Dependencies
 credpile uses the following AWS services:
@@ -92,18 +92,18 @@ See https://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standar
 
 ## Usage
 ```
-usage: credpile [-h] [-r REGION] [-t TABLE] {delete,get,getall,list,put,setup} ...
+usage: credpile [-h] [-r REGION] [-b BUCKET] [-P PATH] {delete,get,getall,list,put,setup} ...
 
 A credential/secret storage system
 
 delete
-    usage: credpile delete [-h] [-r REGION] [-t TABLE] credential
+    usage: credpile delete [-h] [-r REGION] [-b BUCKET] [-P PATH] credential
 
     positional arguments:
       credential  the name of the credential to delete
 
 get
-    usage: credpile get [-h] [-r REGION] [-t TABLE] [-k KEY] [-n] [-v VERSION]
+    usage: credpile get [-h] [-r REGION] [-b BUCKET] [-P PATH] [-k KEY] [-n] [-v VERSION]
                          credential [context [context ...]]
 
     positional arguments:
@@ -121,7 +121,7 @@ get
                             the latest version).
 
 getall
-    usage: credpile getall [-h] [-r REGION] [-t TABLE] [-v VERSION] [-f {json,yaml,csv}]
+    usage: credpile getall [-h] [-r REGION] [-b BUCKET] [-P PATH] [-v VERSION] [-f {json,yaml,csv}]
                             [context [context ...]]
 
     positional arguments:
@@ -137,7 +137,7 @@ getall
 
 
 list
-    usage: credpile list [-h] [-r REGION] [-t TABLE]
+    usage: credpile list [-h] [-r REGION] [-b BUCKET] [-P PATH]
 
 put
 usage: credpile put [-h] [-k KEY] [-v VERSION] [-a]
@@ -165,7 +165,7 @@ optional arguments:
                         stored version is not numeric.)
 
 setup
-    usage: credpile setup [-h] [-r REGION] [-t TABLE]
+    usage: credpile setup [-h] [-r REGION] [-b BUCKET] [-P PATH]
 
 optional arguments:
   -r REGION, --region REGION
