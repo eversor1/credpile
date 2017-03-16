@@ -526,54 +526,6 @@ def deleteSecrets(name, region=None, table="credential-store",
         secrets.delete_item(Key=secret)
 
 
-@clean_fail
-def createDdbTable(region=None, table="credential-store", **kwargs):
-    '''
-    create the secret store table in DDB in the specified region
-    '''
-    session = get_session(**kwargs)
-    dynamodb = session.resource("dynamodb", region_name=region)
-    if table in (t.name for t in dynamodb.tables.all()):
-        print("Credential Store table already exists")
-        return
-
-    print("Creating table...")
-    dynamodb.create_table(
-        TableName=table,
-        KeySchema=[
-            {
-                "AttributeName": "name",
-                "KeyType": "HASH",
-            },
-            {
-                "AttributeName": "version",
-                "KeyType": "RANGE",
-            }
-        ],
-        AttributeDefinitions=[
-            {
-                "AttributeName": "name",
-                "AttributeType": "S",
-            },
-            {
-                "AttributeName": "version",
-                "AttributeType": "S",
-            },
-        ],
-        ProvisionedThroughput={
-            "ReadCapacityUnits": 1,
-            "WriteCapacityUnits": 1,
-        }
-    )
-
-    print("Waiting for table to be created...")
-    client = session.client("dynamodb", region_name=region)
-    client.get_waiter("table_exists").wait(TableName=table)
-
-    print("Table has been created. "
-          "Go read the README about how to create your KMS key")
-
-
 def get_session(aws_access_key_id=None, aws_secret_access_key=None,
                 aws_session_token=None, profile_name=None):
     if get_session._cached_session is None:
@@ -828,10 +780,6 @@ def get_parser():
                                  "to encrypt the data. Defaults to SHA256")
     parsers[action].set_defaults(action=action)
 
-    action = 'setup'
-    parsers[action] = subparsers.add_parser(action,
-                                            help='setup the credential store')
-    parsers[action].set_defaults(action=action)
     return parsers
 
 

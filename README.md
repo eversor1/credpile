@@ -71,8 +71,6 @@ You will need to have AWS credentials accessible to boto/botocore. The easiest t
 
 You can specify the region in which `credpile` should operate by using the `-r` flag, or by setting the `AWS_DEFAULT_REGION` environment variable. Note that the command line flag takes precedence over the environment variable. If you set neither, then `credpile` will operate against us-east-1.
 
-Once credentials are in place, run `credpile setup`. This will create the DDB table needed for credential storage.
-
 ### Working with multiple AWS accounts (profiles)
 
 If you need to work with multiple AWS accounts, an easy thing to do is to set up multiple profiles in your `~/.aws/credentials` file. For example,
@@ -140,7 +138,7 @@ list
     usage: credpile list [-h] [-r REGION] [-b BUCKET] [-P PATH]
 
 put
-usage: credpile put [-h] [-k KEY] [-v VERSION] [-a]
+usage: credpile put [-h] [-k KEY] [-v VERSION] [-b BUCKET] [-P PATH] [-a]
                      credential value [context [context ...]]
 
 positional arguments:
@@ -234,33 +232,8 @@ You can read secrets from credpile with the get or getall actions by either usin
 ```
 If you are using Key Policies or Grants, then the `kms:Decrypt` is not required in the policy for the IAM user/group/role. Replace `AWSACCOUNTID` with the account ID for your table, and replace the KEY-GUID with the identifier for your KMS key (which you can find in the KMS console). Note that the `dynamodb:Scan` permission is not required if you do not use wildcards in your `get`s.
 
-### Setup Permissions
-In order to run `credpile setup`, you will also need to be able to perform the following DDB operations:
-```
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": [
-                "dynamodb:CreateTable",
-                "dynamodb:DescribeTable"
-            ],
-            "Effect": "Allow",
-            "Resource": "arn:aws:dynamodb:us-west-2:<ACCOUNT NUMBER>:table/credential-store"
-        },
-        {
-            "Action": [
-                "dynamodb:ListTables"
-            ],
-            "Effect": "Allow",
-            "Resource": "*"
-        }
-    ]
-}
-```
-
 ## Security Notes
-Any IAM principal who can get items from the credential store DDB table, and can call KMS.Decrypt, can read stored credentials.
+Any IAM principal who can get items from the credential store S3 Bucket, and can call KMS.Decrypt, can read stored credentials.
 
 The target deployment-story for `credpile` is an EC2 instance running with an IAM role that has permissions to read the credential store and use the master key. Since IAM role credentials are vended by the instance metadata service, by default, any user on the system can fetch creds and use them to retrieve credentials. That means that by default, the instance boundary is the security boundary for this system. If you are worried about unauthorized users on your instance, you should take steps to secure access to the Instance Metadata Service (for example, use iptables to block connections to 169.254.169.254 except for privileged users). Also, because credpile is written in python, if an attacker can dump the memory of the credpile process, they may be able to recover credentials. This is a known issue, but again, in the target deployment case, the security boundary is assumed to be the instance boundary.
 
@@ -272,20 +245,3 @@ The master key is stored in AWS Key Management Service (KMS), where it is stored
 
 ### 2. How is credential rotation handled?
 Every credential in the store has a version number. Whenever you want to a credential to a new value, you have to do a `put` with a new credential version. For example, if you have `foo` version 1 in the database, then to update `foo`, you can put version 2. You can either specify the version manually (i.e. `credpile put foo bar -v 2`), or you can use the `-a` flag, which will attempt to autoincrement the version number (for example, `credpile put foo baz -a`). Whenever you do a `get` operation, credpile will fetch the most recent (highest version) version of that credential. So, to do credential rotation, simply put a new version of the credential, and clients fetching the credential will get the new version.
-
-### 3. How much do the AWS services needed to run credpile cost?
-tl;dr: If you are using less than 25 reads/sec and 25 writes per second on DDB today, it will cost ~$1/month to use credpile.
-
-The master key in KMS costs $1 per month.
-
-The credential store DDB table uses 1 provisioned read and 1 provisioned write throughput, along with a small amount of actual storage. This falls well below the free tier for DDB (25 reads and 25 writes per second). If you are already a heavy DDB user and exceed the free tier, the credential store table will cost about $0.53 per month (mostly from the write throughput).
-
-If you are using credpile heavily and need to increase the provisioned reads/writes, you may incur additional charges. You can estimate your bill using the AWS Simple Monthly Calculator (http://calculator.s3.amazonaws.com/index.html#s=DYNAMODB).
-
-### 4. Why DynamoDB for the credential store? Why not S3?
-DDB fits the application really well. Having very low latency fetches are really nice if credpile is in the critical path of spinning up an application. Being able to turn throughput up or down based on load and requirements are also great things to have in a config management tool. Also, as credpile gets into more complex credential management functions, the query capabilities of DDB get super handy.
-
-That said, S3 support may happen someday.
-
-### 5. Where can I learn more about use cases and context for something like credpile?
-Check out this blog post: http://blog.fugue.it/2015-04-21-aws-kms-secrets.html
