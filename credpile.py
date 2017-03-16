@@ -1,4 +1,12 @@
 #!/usr/bin/env python
+#
+# Copyright 2017 Michael Shipp
+#
+# CredPile(https://github.com/eversor1/credpile) 
+# as derived from CredStash: https://github.com/fugue/credstash
+# A warm "Thank You" goes to the CredStash team who has made this 
+# wonderful app a reality.
+#
 # Copyright 2015 Luminal, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,7 +47,7 @@ except ImportError:
     NO_YAML = True
 
 from base64 import b64encode, b64decode
-from boto3.dynamodb.conditions import Attr
+#from boto3.dynamodb.conditions import Attr
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
@@ -266,13 +274,20 @@ def listSecrets(region=None, bucket="credential-store", path="", **kwargs):
     and return the names and versions of every credential
     '''
     response=[]
+    responseItem=[]
     session = get_session(**kwargs)
     credclient = session.get_client('s3')
     files = client.list_objects_v2(Bucket=bucket, Prefix=path)
     for f in files['Contents']:
       responseItem['name'] = cleanName(f['Key'])
-      responseItem['version'] = getHighestVersion(name=f['Key'], bucket=bucket, region=region)
-      response.extend(responseItem)
+      try: 
+        secrets = credclient.get_object(Bucket=bucket, key=f['Key'])
+        creds = pickle.loads(secrets['Body'].read())
+        for version in creds.keys():
+          responseItem['version'] = version
+          response.extend(responseItem)
+      except:
+        pass
 
     #dynamodb = session.resource('dynamodb', region_name=region)
     #secrets = dynamodb.Table(table)
@@ -319,14 +334,12 @@ def putSecret(name, secret, version="", kms_key="alias/credpile",
     appender[paddedInt(version)] = data
     secrets.update(appender)
     putobj = pickle.dumps(secrets)
-    #try:
-    return credclient.put_object(Bucket=bucket, Key=path+name, ServerSideEncryption='AES256', Body=putobj)
-    #except:
-    #  return False
-    #return secrets.put_item(Item=data, ConditionExpression=Attr('name').not_exists())
+    try:
+      return credclient.put_object(Bucket=bucket, Key=path+name, ServerSideEncryption='AES256', Body=putobj)
+    except:
+      raise botocore.exceptions.ClientError
 
-
-def getAllSecrets(version="", region=None, table="credential-store",
+def getAllSecrets(version="", region=None, bucket="credential-store", path="",
                   context=None, credential=None, session=None, **kwargs):
     '''
     fetch and decrypt all secrets
@@ -334,17 +347,16 @@ def getAllSecrets(version="", region=None, table="credential-store",
     output = {}
     if session is None:
         session = get_session(**kwargs)
-    dynamodb = session.resource('dynamodb', region_name=region)
+    #dynamodb = session.resource('dynamodb', region_name=region)
+    s3 = session.client('s3', region_name=region)
     kms = session.client('kms', region_name=region)
-    secrets = listSecrets(region, table, **kwargs)
+    secrets = listSecrets(region, bucket, path, **kwargs)
 
     # Only return the secrets that match the pattern in `credential`
     # This already works out of the box with the CLI get action,
     # but that action doesn't support wildcards when using as library
     if credential and WILDCARD_CHAR in credential:
-        names = set(expand_wildcard(credential,
-                                    [x["name"]
-                                     for x in secrets]))
+        names = set(expand_wildcard(credential, [x["name"] for x in secrets]))
     else:
         names = set(x["name"] for x in secrets)
 
@@ -353,9 +365,10 @@ def getAllSecrets(version="", region=None, table="credential-store",
             output[credential] = getSecret(credential,
                                            version,
                                            region,
-                                           table,
+                                           bucket,
+					                                 path,
                                            context,
-                                           dynamodb,
+                                           s3
                                            kms,
                                            **kwargs)
         except:
@@ -510,21 +523,15 @@ def getSecret(name, version="", region=None,
 
 
 @clean_fail
-def deleteSecrets(name, region=None, table="credential-store",
-                  **kwargs):
+def deleteSecrets(name, region=None, bucket="credential-store", path="", **kwargs):
     session = get_session(**kwargs)
-    dynamodb = session.resource('dynamodb', region_name=region)
-    secrets = dynamodb.Table(table)
+    s3 = session.client('s3', region_name=region)
 
-    response = secrets.scan(FilterExpression=boto3.dynamodb.conditions.Attr("name").eq(name),
-                            ProjectionExpression="#N, version",
-                            ExpressionAttributeNames={"#N": "name"})
-
-    for secret in response["Items"]:
-        print("Deleting %s -- version %s" %
-              (secret["name"], secret["version"]))
-        secrets.delete_item(Key=secret)
-
+    try: 
+      secrets = credclient.delete_object(Bucket=bucket, key=path+name)
+      print("Deleting all versions of %s" % name)
+    except:
+      raise botocore.exceptions.ClientError
 
 def get_session(aws_access_key_id=None, aws_secret_access_key=None,
                 aws_session_token=None, profile_name=None):
@@ -793,7 +800,7 @@ def main():
     try:
         region = args.region
         session = get_session(**session_params)
-        session.resource('dynamodb', region_name=region)
+        session.client('s3', region_name=region)
     except botocore.exceptions.NoRegionError:
         if 'AWS_DEFAULT_REGION' not in os.environ:
             region = DEFAULT_REGION
@@ -802,7 +809,8 @@ def main():
         if args.action == "delete":
             deleteSecrets(args.credential,
                           region=region,
-                          table=args.table,
+                          bucket=args.bucket,
+                          path=args.path,
                           **session_params)
             return
         if args.action == "list":
@@ -816,10 +824,6 @@ def main():
             return
         if args.action == "getall":
             getAllAction(args, region, **session_params)
-            return
-        if args.action == "setup":
-            createDdbTable(region=region, table=args.table,
-                           **session_params)
             return
     else:
         parsers['super'].print_help()
