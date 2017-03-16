@@ -192,13 +192,6 @@ You can put or write secrets to credpile by either using KMS Key Grants, KMS Key
       ],
       "Effect": "Allow",
       "Resource": "arn:aws:kms:us-east-1:AWSACCOUNTID:key/KEY-GUID"
-    },
-    {
-      "Action": [
-        "dynamodb:PutItem"
-      ],
-      "Effect": "Allow",
-      "Resource": "arn:aws:dynamodb:us-east-1:AWSACCOUNTID:table/credential-store"
     }
   ]
 }
@@ -217,20 +210,11 @@ You can read secrets from credpile with the get or getall actions by either usin
       ],
       "Effect": "Allow",
       "Resource": "arn:aws:kms:us-east-1:AWSACCOUNTID:key/KEY-GUID"
-    },
-    {
-      "Action": [
-        "dynamodb:GetItem",
-        "dynamodb:Query",
-        "dynamodb:Scan"
-      ],
-      "Effect": "Allow",
-      "Resource": "arn:aws:dynamodb:us-east-1:AWSACCOUNTID:table/credential-store"
     }
   ]
 }
 ```
-If you are using Key Policies or Grants, then the `kms:Decrypt` is not required in the policy for the IAM user/group/role. Replace `AWSACCOUNTID` with the account ID for your table, and replace the KEY-GUID with the identifier for your KMS key (which you can find in the KMS console). Note that the `dynamodb:Scan` permission is not required if you do not use wildcards in your `get`s.
+If you are using Key Policies or Grants, then the `kms:Decrypt` is not required in the policy for the IAM user/group/role. Replace `AWSACCOUNTID` with the account ID for your table, and replace the KEY-GUID with the identifier for your KMS key (which you can find in the KMS console).
 
 ## Security Notes
 Any IAM principal who can get items from the credential store S3 Bucket, and can call KMS.Decrypt, can read stored credentials.
