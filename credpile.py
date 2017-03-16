@@ -218,6 +218,17 @@ def paddedInt(i):
     pad = PAD_LEN - len(i_str)
     return (pad * "0") + i_str
 
+def cleanPath(path):
+    '''
+    clean up the provided path string
+    '''
+    if len(path) > 0:
+      if path.endswith('/'):
+        return path
+      else
+        return path+'/'
+    else
+      return path
 
 def getHighestVersion(name, region=None, bucket="credential-store", path="",
                       **kwargs):
@@ -228,7 +239,7 @@ def getHighestVersion(name, region=None, bucket="credential-store", path="",
     session = get_session(**kwargs)
     credclient = session.client('s3')
     try: 
-      secrets = credclient.get_object(Bucket=bucket, key=path+name)
+      secrets = credclient.get_object(Bucket=bucket, key=cleanPath(path)+name)
       creds = pickle.loads(secrets['Body'].read())
       return max(keys(creds))
     except:
@@ -320,7 +331,7 @@ def putSecret(name, secret, version="", kms_key="alias/credpile",
     credclient = session.client('s3', region_name=region)
     appender = {}
     try: 
-      secretsdata = credclient.get_object(Bucket=bucket, key=path+name)
+      secretsdata = credclient.get_object(Bucket=bucket, key=cleanPath(path)+name)
       secrets = pickle.loads(secretsdata)
     except:
       secrets = {}
@@ -335,7 +346,7 @@ def putSecret(name, secret, version="", kms_key="alias/credpile",
     secrets.update(appender)
     putobj = pickle.dumps(secrets)
     try:
-      return credclient.put_object(Bucket=bucket, Key=path+name, ServerSideEncryption='AES256', Body=putobj)
+      return credclient.put_object(Bucket=bucket, Key=cleanPath(path)+name, ServerSideEncryption='AES256', Body=putobj)
     except:
       raise botocore.exceptions.ClientError
 
@@ -380,7 +391,8 @@ def getAllSecrets(version="", region=None, bucket="credential-store", path="",
 def getAllAction(args, region, **session_params):
     secrets = getAllSecrets(args.version,
                             region=region,
-                            table=args.table,
+                            bucket=args.bucket,
+                            path=args.path,
                             context=args.context,
                             **session_params)
     if args.format == "json":
@@ -404,9 +416,9 @@ def getAllAction(args, region, **session_params):
 def putSecretAction(args, region, **session_params):
     if args.autoversion:
         latestVersion = getHighestVersion(args.credential,
-                                          region,
-                                          args.bucket,
-                                          args.path,
+                                          region=region,
+                                          bucket=args.bucket,
+                                          path=args.path,
                                           **session_params)
         try:
             version = paddedInt(int(latestVersion) + 1)
@@ -425,8 +437,8 @@ def putSecretAction(args, region, **session_params):
         fatal(e)
     except botocore.exceptions.ClientError as e:
         if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            latestVersion = getHighestVersion(args.credential, region,
-                                              args.bucket, args.table,
+            latestVersion = getHighestVersion(args.credential, region=region,
+                                              bucket=args.bucket, path=args.path,
                                               **session_params)
             fatal("%s version %s is already in the credential store. "
                   "Use the -v flag to specify a new version" %
@@ -641,7 +653,8 @@ def get_digest(digest):
 @clean_fail
 def list_credentials(region, args, **session_params):
     credential_list = listSecrets(region=region,
-                                  table=args.table,
+                                  bucket=args.bucket,
+                                  path=args.path,
                                   **session_params)
     if credential_list:
         # print list of credential names and versions,
