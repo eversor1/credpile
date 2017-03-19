@@ -6,7 +6,7 @@ CredPile has added config file support based on AWS profile. Using the AWS profi
 [default]
 bucket=defaultbucket
 path=defaultpath
-key=defaultkey
+key=alias/defaultkey
 ```
 
 ### Linux install-time dependencies
