@@ -1,5 +1,14 @@
 # CredPile
 
+### NEW!
+CredPile has added config file support based on AWS profile. Using the AWS profile name set up for your credentials, you can now include defaults for Bucket, Path and Key in a ~/.aws/credpile file on a per-profile basis. The "default" profile and be specified for use when not specifying a profile. set up as follows in ~/.aws/credpile:
+```
+[default]
+bucket=defaultbucket
+path=defaultpath
+key=defaultkey
+```
+
 ### Linux install-time dependencies
 CredPile recently moved from PyCrypto to `cryptography`. `cryptography` uses pre-built binary wheels on OSX and Windows, but does not on Linux. That means that you need to install some dependencies if you want to run credpile on linux. 
 
