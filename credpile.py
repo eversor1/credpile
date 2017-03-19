@@ -54,6 +54,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.hmac import HMAC
+from os.path import expanduser
 
 _hash_classes = {
     'SHA': hashes.SHA1,
@@ -760,7 +761,44 @@ def main():
 
     # Check for assume role and set  session params
     session_params = get_session_params(args.profile, args.arn)
+    config_file="~/.aws/credpile"
+    config={}
+    try:
+      f=open(expanduser(config_file))
+      configlines=f.read()
+      profile="default"
+      for c in configlines.splitlines():
+          if c.strip().startswith('[') and c.strip().endswith(']'):
+            profile=c.strip('[] ')
+            config[profile]={}
+          else:
+            key,value=c.split('=')
+            config[profile][key]=value
+      profile=args.profile
+      if profile==None:
+        profile="default"
+      try:
+        config[profile]['bucket']
+      except:
+        pass
+      else:
+        args.bucket=config[profile]['bucket']
 
+      try:
+        config[profile]['path']
+      except:
+        pass
+      else:
+        args.path=cleanPath(config[profile]['path'])
+
+      try:
+        config[profile]['key']
+      except:
+        pass
+      else:
+        args.key=config[profile]['key']
+    except:
+      pass
     try:
         region = args.region
         session = get_session(**session_params)
