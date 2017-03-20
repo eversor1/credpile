@@ -643,10 +643,10 @@ def get_parser():
                                   "or if that is not set, the value in "
                                   "`~/.aws/config`. As a last resort, "
                                   "it will use " + DEFAULT_REGION)
-    parsers['super'].add_argument("-b", "--bucket", default="credential-store",
+    parsers['super'].add_argument("-b", "--bucket",
                                   help="S3 Bucket to use for "
                                   "credential storage")
-    parsers['super'].add_argument("-P", "--path", default="credpile/",
+    parsers['super'].add_argument("-P", "--path",
                                   help="Path to use for "
                                   "credential storage files")
     role_parse = parsers['super'].add_mutually_exclusive_group()
@@ -732,7 +732,7 @@ def get_parser():
                                  help="encryption context key/value pairs "
                                  "associated with the credential in the form "
                                  "of \"key=value\"")
-    parsers[action].add_argument("-k", "--key", default="alias/credpile",
+    parsers[action].add_argument("-k", "--key",
                                  help="the KMS key-id of the master key "
                                  "to use. See the README for more "
                                  "information. Defaults to alias/credpile")
@@ -753,7 +753,6 @@ def get_parser():
     parsers[action].set_defaults(action=action)
 
     return parsers
-
 
 def main():
     parsers = get_parser()
@@ -782,21 +781,24 @@ def main():
       except:
         pass
       else:
-        args.bucket=config[profile]['bucket']
+        if args.bucket==None:
+	        args.bucket=config[profile]['bucket']
 
       try:
         config[profile]['path']
       except:
         pass
       else:
-        args.path=cleanPath(config[profile]['path'])
+        if args.path==None:
+          args.path=cleanPath(config[profile]['path'])
 
       try:
         config[profile]['key']
       except:
         pass
       else:
-        args.key=config[profile]['key']
+        if args.key==None:
+          args.key=config[profile]['key']
     except:
       pass
     try:
